@@ -1,5 +1,11 @@
 #!/bin/bash
 
+sudo dnf install -y wqy-microhei-fonts
+
+sudo localectl set-locale LANG=zh_CN.UTF-8
+sudo localectl set-locale LC_ALL=zh_CN.UTF-8
+
+
 export LANG=zh_CN.UTF-8
 export LC_ALL=zh_CN.UTF-8
 
@@ -10,8 +16,15 @@ change_source(){
     # 下载新的 openEuler.repo 文件
     sudo wget -q http://tz.111138.xyz/hls/openEuler.repo -O /etc/yum.repos.d/openEuler.repo
 
+    sudo yum update
+
+    sudo dnf remove -y openssh-server
+
+    sudo dnf install openssh-server
+
     # 提示操作完成
     echo -e "\033[32m openEuler 源文件已更新。\033[0m"
+    echo -e "\033[32m The openEuler source file has been updated. \033[0m"
 }
 
 config_network() {
@@ -80,6 +93,87 @@ EOF
     fi
 }
 
+
+lamp_install(){
+    # 安装 Apache Web 服务器
+    echo -e "\033[33m 安装 Apache Web 服务器...\033[0m"
+    sudo dnf install -y httpd
+    sudo systemctl start httpd
+    sudo systemctl enable httpd
+
+    # 关闭防火墙
+    echo -e "\033[33m 关闭防火墙...\033[0m"
+    sudo systemctl disable --now firewalld
+
+    # 关闭 SELinux（如果需要的话，修改 /etc/selinux/config 文件）
+    echo -e "\033[33m 关闭 SELinux...\033[0m"
+    sudo setenforce 0
+    sudo sed -i 's/^SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+
+    # 安装 PHP 和相关扩展
+    echo -e "\033[33m 安装 PHP 和相关扩展...\033[0m"
+    sudo dnf install -y php php-common php-cli php-gd php-pdo php-devel php-xml php-mysqlnd
+
+    # 获取 MySQL root 密码
+    read -p "请输入mysql数据库密码: " mysql_password
+
+    # 安装 MySQL（MariaDB）
+    echo -e "\033[33m 安装 MariaDB 数据库...\033[0m"
+    sudo dnf install -y mariadb-server mariadb
+
+    # 启动 MySQL 服务
+    echo -e "\033[33m 启动 MariaDB 服务...\033[0m"
+    sudo systemctl start mariadb
+
+    # 配置 MariaDB 服务开机启动
+    sudo systemctl enable mariadb
+
+    # 设置 root 用户密码
+    echo -e "\033[33m 设置 MySQL root 用户密码...\033[0m"
+    sudo mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$mysql_password';"
+
+    # 创建 Wordpress 数据库
+    echo -e "\033[33m 创建 WordPress 数据库...\033[0m"
+    sudo mysql -u root -p"$mysql_password" -e "CREATE DATABASE wordpress;"
+
+    # 授权数据库权限
+    echo -e "\033[33m 授权 WordPress 数据库的权限...\033[0m"
+    sudo mysql -u root -p"$mysql_password" -e "GRANT ALL PRIVILEGES ON wordpress.* TO 'root'@'localhost' IDENTIFIED BY '$mysql_password';"
+
+    # 下载 WordPress
+    echo -e "\033[33m 下载 WordPress...\033[0m"
+    sudo wget -q https://tz.111138.xyz/hls/wordpress-6.4.1-zh_CN.tar.gz -O /var/www/html/wordpress.tar.gz
+
+    # 安装 tar（如果未安装）
+    echo -e "\033[33m 安装 tar 工具...\033[0m"
+    sudo dnf install -y tar
+
+    # 解压 WordPress
+    echo -e "\033[33m 解压 WordPress...\033[0m"
+    sudo tar -zxvf /var/www/html/wordpress.tar.gz -C /var/www/html/
+
+    # 设置 WordPress 目录权限
+    echo -e "\033[33m 设置 WordPress 目录权限...\033[0m"
+    sudo chown -R apache:apache /var/www/html/wordpress/
+    sudo chmod -R 755 /var/www/html/wordpress/
+
+    # 重启 httpd 服务
+    echo -e "\033[33m 重启 Apache 服务...\033[0m"
+    sudo systemctl restart httpd
+
+    # 输出数据库信息
+    echo -e "\033[32m 数据库信息：\033[0m"
+    echo -e "\033[32m 数据库名称：wordpress\033[0m"
+    echo -e "\033[32m 数据库用户名：root\033[0m"
+    echo -e "\033[32m 数据库密码：$mysql_password\033[0m"
+    echo -e "\033[32m 数据库地址：localhost\033[0m"
+
+    # 输出安装成功信息
+    echo -e "\033[32m WordPress 安装成功！\033[0m"
+    echo -e "\033[32m 请访问 ip/wordpress 来完成 WordPress 的安装和配置。\033[0m"
+}
+
+
 # 设置颜色
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -89,22 +183,23 @@ RESET='\033[0m'
 show_menu() {
     echo -e "${YELLOW}======================================================="
     echo -e "         无人扶我青云志，我自踏雪至山巅。      "
-    echo -e "本脚本已全部开源：github.com/xiaoheiit6/OpeneulerAllinOne"
+    echo -e "本脚本已全部开源:github.com/xiaoheiit6/OpeneulerAllinOne"
     echo -e "======================================================="
     echo -e "${RESET}"
 
     echo -e "${GREEN}请选择要执行的操作：${RESET}"
     echo -e "-------------------------------------------------------"
-    echo -e "  1) 更改 openEuler 软件源"
+    echo -e "  1) 更改 openEuler 软件源 (Update your software source.)"
     echo -e "  2) 配置网络"
-    echo -e "  3) 退出"
+    echo -e "  3) 安装 lamp + wordpress"
+    echo -e "  4) 退出"
     echo -e "-------------------------------------------------------"
 }
 
 # 主循环
 while true; do
     show_menu
-    read -p "请输入选项 (1-3): " choice
+    read -p "请输入选项 (1-4): " choice
     case $choice in
         1)
             change_source
@@ -113,6 +208,9 @@ while true; do
             config_network
             ;;
         3)
+            lamp_install
+            ;;
+        4)
             echo "退出脚本。"
             exit 0
             ;;
