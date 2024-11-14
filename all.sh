@@ -1,10 +1,5 @@
 #!/bin/bash
 
-sudo dnf install -y wqy-microhei-fonts
-
-sudo localectl set-locale LANG=zh_CN.UTF-8
-sudo localectl set-locale LC_ALL=zh_CN.UTF-8
-
 
 export LANG=zh_CN.UTF-8
 export LC_ALL=zh_CN.UTF-8
